@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "description": "本地优先的四平台作业清单",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node server/index.mjs",
     "dev": "node --watch server/index.mjs",
@@ -12,5 +14,8 @@
     "check": "node scripts/check.mjs",
     "setup:ocr": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File scripts/setup-ocr.ps1"
   },
-  "dependencies": { "playwright": "^1.55.0" }
+  "dependencies": {
+    "nodemailer": "^10.0.10",
+    "playwright": "^1.55.0"
+  }
 }

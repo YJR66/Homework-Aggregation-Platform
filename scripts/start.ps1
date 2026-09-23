@@ -44,7 +44,8 @@ try {
         if ($LASTEXITCODE -ne 0 -or $version -notmatch '^v(\d+)\.' -or [int]$Matches[1] -lt 22) {
             throw '请安装 Node.js 22 或更新版本，再重新启动。'
         }
-        if (-not (Test-Path -LiteralPath (Join-Path $root 'node_modules/playwright'))) {
+        if (-not (Test-Path -LiteralPath (Join-Path $root 'node_modules/playwright')) -or
+            -not (Test-Path -LiteralPath (Join-Path $root 'node_modules/nodemailer'))) {
             $npm = Get-Command npm.cmd -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
             if (-not $npm) { throw '未找到 npm，请重新安装 Node.js。' }
             & $npm.Source ci

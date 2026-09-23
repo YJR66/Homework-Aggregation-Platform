@@ -40,6 +40,7 @@ test('launcher keeps the server hidden and serializes default-port health checks
   assert.ok(text.indexOf('$running = Test-Application') < text.indexOf('Get-Command node'));
   assert.match(text, /\$node = Get-Command node[^\r\n]+\| Select-Object -First 1/);
   assert.match(text, /\$npm = Get-Command npm\.cmd[^\r\n]+\| Select-Object -First 1/);
+  assert.match(text, /node_modules\/nodemailer/);
 });
 
 test('stop requests a validated graceful shutdown and never kills a stored PID', async () => {

@@ -25,6 +25,7 @@
     <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 5v16M3 3h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5v15h-5a4 4 0 0 0-4 3 4 4 0 0 0-4-3H3Z"/></symbol>
     <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7Z"/><path d="m8 12 3 3 5-6"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></symbol>
     <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
   </svg>
 
@@ -40,6 +41,7 @@
     <nav class="platform-nav" id="platform-nav" aria-label="按平台筛选"></nav>
     <div class="sidebar-bottom">
       <button class="nav-item" id="open-settings"><svg class="icon"><use href="#i-settings"/></svg><span>同步设置</span></button>
+      <button class="nav-item" id="open-email-settings"><svg class="icon"><use href="#i-mail"/></svg><span>邮件提醒</span><span class="nav-count" id="email-nav-status"></span></button>
       <div class="local-privacy">数据保存在本机</div>
     </div>
   </aside>
@@ -99,6 +101,32 @@
   </dialog>
 
   <dialog class="modal small-modal" id="settings-dialog" aria-labelledby="settings-title"><form id="settings-form"><div class="modal-header"><div><h2 id="settings-title">同步设置</h2></div><button class="icon-button" type="button" data-close-dialog="settings-dialog" aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button></div><p class="modal-description">服务运行且登录有效时，按设定间隔同步。</p><label class="toggle-row"><span><strong>自动同步</strong><small>定时检查新作业</small></span><input type="checkbox" id="auto-sync"><span class="switch" aria-hidden="true"></span></label><label class="form-label interval-label">同步间隔 <span class="input-with-suffix"><input id="sync-interval" type="number" min="5" max="1440" step="1" required value="30"><span>分钟</span></span></label><div class="form-note"><svg class="icon"><use href="#i-clock"/></svg><span>登录过期时点击「已保存账号登录」；需要短信、扫码等验证时使用「人工辅助」。</span></div><p class="form-error" id="settings-error" role="alert" hidden></p><div class="modal-actions"><button class="button secondary" type="button" data-close-dialog="settings-dialog">取消</button><button class="button primary" id="save-settings" type="submit">保存设置</button></div></form></dialog>
+
+  <dialog class="modal email-modal" id="email-dialog" aria-labelledby="email-title">
+    <form id="email-form">
+      <div class="modal-header"><h2 id="email-title">邮件提醒</h2><button class="icon-button" type="button" data-close-dialog="email-dialog" aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button></div>
+      <p class="modal-description">按截止时间给最近已核对、平台仍显示未完成的作业发邮件；同一作业、截止时间和规则只提醒一次。</p>
+      <label class="toggle-row email-toggle"><span><strong>启用邮件提醒</strong><small>仅在本机服务运行时检查</small></span><input id="email-enabled" type="checkbox"><span class="switch" aria-hidden="true"></span></label>
+      <h3 class="email-section-title">发信设置</h3>
+      <div class="form-grid email-config-grid">
+        <label>SMTP 主机<input id="email-host" type="text" autocomplete="off" placeholder="smtp.example.com"></label>
+        <label>端口<input id="email-port" type="number" min="1" max="65535" value="465"></label>
+        <label>加密方式<select id="email-security"><option value="ssl">SSL/TLS</option><option value="starttls">STARTTLS</option></select></label>
+        <label>SMTP 账号<input id="email-username" type="text" autocomplete="username" placeholder="邮箱账号或 SMTP 用户名"></label>
+        <label>SMTP 密码或授权码<input id="email-password" type="password" autocomplete="new-password" placeholder="请输入密码或授权码"></label>
+        <label>发件地址<input id="email-from" type="email" autocomplete="email" placeholder="sender@example.com"></label>
+        <label>收件地址<input id="email-to" type="email" autocomplete="off" placeholder="you@example.com"></label>
+        <label>状态时效（分钟）<input id="email-freshness" type="number" min="5" max="1440" value="120"></label>
+      </div>
+      <p class="email-help">SMTP 密码仅在本机加密保存，不会回显；已保存时留空可沿用。只对指定收件地址发送纯文本邮件，不附带平台登录链接。</p>
+      <div class="email-rules-heading"><h3 class="email-section-title">截止时间规则</h3><button class="button secondary small" id="add-email-rule" type="button">添加规则</button></div>
+      <div class="email-rules" id="email-rules"></div>
+      <p class="email-help">可添加多条“截止前／截止后”规则，并限定平台。规则启用前已错过的时间点不会补发；服务暂停后会在恢复且作业状态仍新鲜时补发。</p>
+      <p class="email-delivery-status" id="email-delivery-status" aria-live="polite"></p>
+      <p class="form-error" id="email-error" role="alert" hidden></p>
+      <div class="modal-actions email-actions"><button class="button secondary" id="test-email" type="button">发送测试邮件</button><button class="button secondary" type="button" data-close-dialog="email-dialog">取消</button><button class="button primary" id="save-email" type="submit">保存邮件设置</button></div>
+    </form>
+  </dialog>
   <div class="toast-container" id="toasts" aria-live="polite" aria-atomic="false"></div>
 </body>
 </html>

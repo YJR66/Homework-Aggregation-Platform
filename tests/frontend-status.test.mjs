@@ -16,7 +16,7 @@ function ui() {
     return nodes.get(selector);
   } };
   const api = vm.runInNewContext(`${source.slice(0, functionsEnd)}
-    return { model, isComplete, isSubmitted, isPlatformComplete, isOverdue, isUnknown, describeDue, platformStatusLabel, progressLabel, assignmentMarkup, renderStats };
+    return { model, isComplete, isSubmitted, isPlatformComplete, isOverdue, isUnknown, describeDue, platformStatusLabel, progressLabel, assignmentMarkup, renderStats, emailRuleMarkup, renderEmailRules };
   })();`, { URL, Date, Intl, document });
   return { ...api, nodes };
 }
@@ -32,6 +32,21 @@ test('login UI asks for credentials instead of offering a session-only verificat
   assert.match(pageSource, /id="credential-vpn-password"/);
   assert.match(pageSource, /id="save-credentials"[^>]*>保存并登录/);
   assert.doesNotMatch(pageSource, /id="credential-entry"/);
+});
+
+test('email settings render editable deadline rules without exposing an SMTP password', () => {
+  const api = ui();
+  assert.match(pageSource, /id="open-email-settings"/);
+  assert.match(pageSource, /id="email-password"[^>]*type="password"/);
+  assert.match(pageSource, /id="email-rules"/);
+  const html = api.emailRuleMarkup({ id: 'rule-1', kind: 'after', minutes: 120, platform: 'pta' });
+  assert.match(html, /value="2"/);
+  assert.match(html, /value="60" selected>小时/);
+  assert.match(html, /value="pta" selected>PTA/);
+  api.renderEmailRules([]);
+  assert.match(api.nodes.get('#email-rules').innerHTML, /尚未添加规则/);
+  api.renderEmailRules([{ id: 'rule-1', kind: 'before', minutes: 1440, platform: 'all' }]);
+  assert.match(api.nodes.get('#email-rules').innerHTML, /value="1440" selected>天/);
 });
 
 test('personal submission and progress labels appear with expandable visible evidence', () => {

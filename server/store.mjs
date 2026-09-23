@@ -1,6 +1,7 @@
 import { readFile, writeFile, mkdir, rename, unlink } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { DEFAULT_EMAIL_SETTINGS } from './reminders.mjs';
 
 export const DEFAULT_PLATFORMS = [
   { id: 'chaoxing', name: '学习通', entryUrl: 'https://i.chaoxing.com' },
@@ -53,6 +54,9 @@ export class Store {
     catch (error) { if (error.code !== 'ENOENT') throw new Error('本地 state.json 无法读取；请先备份并检查文件，未覆盖原数据。'); }
     this.data = {
       version: 1, assignments: [], settings: { autoSync: true, syncIntervalMinutes: 30 }, ...saved,
+      emailSettings: { ...DEFAULT_EMAIL_SETTINGS, ...saved?.emailSettings,
+        rules: Array.isArray(saved?.emailSettings?.rules) ? saved.emailSettings.rules : [] },
+      emailSent: saved?.emailSent && typeof saved.emailSent === 'object' && !Array.isArray(saved.emailSent) ? saved.emailSent : {},
       platforms: DEFAULT_PLATFORMS.map(p => {
         const old = saved?.platforms?.find(s => s.id === p.id);
         return { ...p, status: 'auth_required', message: '请登录后同步作业。', lastSyncAt: null, lastAttemptAt: null, assignmentCount: 0, ...old, authOpen: false,
@@ -98,6 +102,27 @@ export class Store {
       if (typeof settings.autoSync !== 'boolean' || !Number.isInteger(settings.syncIntervalMinutes)
         || settings.syncIntervalMinutes < 5 || settings.syncIntervalMinutes > 1440) throw new Error('同步间隔须为 5～1440 分钟整数。');
       next.settings = settings;
+    });
+  }
+  async updateEmailSettings(settings) {
+    const changes = structuredClone(settings);
+    return this.#mutate(next => { next.emailSettings = { ...next.emailSettings, ...changes, lastError: '' }; });
+  }
+  async updateEmailStatus(patch) {
+    const changes = structuredClone(patch);
+    return this.#mutate(next => {
+      for (const key of ['lastSentAt', 'lastTestAt', 'lastError']) if (Object.hasOwn(changes, key)) next.emailSettings[key] = changes[key];
+    });
+  }
+  async markEmailSent(keys, at) {
+    const delivered = [...new Set(keys)];
+    return this.#mutate(next => {
+      for (const key of delivered) next.emailSent[key] = at;
+      // Keep bounded delivery history across long-running installations.
+      const entries = Object.entries(next.emailSent);
+      if (entries.length > 5000) next.emailSent = Object.fromEntries(entries.sort((a, b) => Date.parse(b[1]) - Date.parse(a[1])).slice(0, 4000));
+      next.emailSettings.lastSentAt = at;
+      next.emailSettings.lastError = '';
     });
   }
   async merge(platform, items, { complete = false } = {}) {

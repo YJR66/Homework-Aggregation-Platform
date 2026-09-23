@@ -7,6 +7,8 @@ import { Vault } from './vault.mjs';
 import { BrowserManager } from './browser.mjs';
 import { collectAssignments } from './connectors.mjs';
 import { gotoReadOnly, syncFailureMessage } from './navigation.mjs';
+import { buildReminderMessage, dueReminderEvents, normalizeEmailSettings } from './reminders.mjs';
+import { sendSmtpMail } from './mailer.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicDir = path.join(ROOT, 'public');
@@ -18,7 +20,8 @@ export function validateEntryUrl(id, value) {
   return u.href;
 }
 
-export async function createApplication({ dataDir = path.join(ROOT, 'data'), browserFactory, collector = collectAssignments, vault: suppliedVault } = {}) {
+export async function createApplication({ dataDir = path.join(ROOT, 'data'), browserFactory, collector = collectAssignments,
+  vault: suppliedVault, mailSender = sendSmtpMail, now = () => Date.now() } = {}) {
   await mkdir(dataDir, { recursive: true });
   const store = await new Store(dataDir).init();
   const vault = suppliedVault || await new Vault(dataDir).init();
@@ -34,8 +37,33 @@ export async function createApplication({ dataDir = path.join(ROOT, 'data'), bro
   }).catch(() => {}) };
   const browser = browserFactory ? browserFactory(browserOptions) : new BrowserManager(browserOptions);
   let closed = false;
+  let emailSending = false;
   const jobs = new Set();
   function background(promise) { jobs.add(promise); promise.catch(() => {}).finally(() => jobs.delete(promise)); }
+  const emailPassword = () => {
+    const saved = vault.get('email');
+    return saved.username === store.data.emailSettings.username ? saved.password : '';
+  };
+  async function checkEmailReminders() {
+    if (closed || emailSending || !store.data.emailSettings.enabled) return false;
+    const settings = store.data.emailSettings;
+    const password = emailPassword();
+    if (!password) return false;
+    const events = dueReminderEvents(store.data.assignments, settings, store.data.emailSent, now());
+    if (!events.length) return false;
+    emailSending = true;
+    try {
+      const result = await mailSender(settings, password, buildReminderMessage(events));
+      if (result?.rejected?.length) throw new Error('SMTP rejected recipient');
+      // Persist only after SMTP accepts the message. The key includes the due
+      // date and rule, so an edited deadline can legitimately alert again.
+      await store.markEmailSent(events.map(event => event.key), new Date(now()).toISOString());
+      return true;
+    } catch {
+      await store.updateEmailStatus({ lastError: '邮件发送失败，请检查 SMTP 配置与网络；下次检查会重试。' });
+      return false;
+    } finally { emailSending = false; }
+  }
   function runAuth(platform, { verifyOnly = false, interactive = false, syncAfter = false } = {}) {
     if (sync.running || loginJobs.size || closed) return false;
     loginJobs.add(platform.id);
@@ -107,15 +135,21 @@ export async function createApplication({ dataDir = path.join(ROOT, 'data'), bro
         await Promise.allSettled(targets.map(scanPlatform));
       } finally {
         sync.running = false; sync.platformId = null; sync.platformIds = [];
+        background(checkEmailReminders());
       }
     })();
     background(task); return true;
   }
   let nextAutoAt = Date.now() + store.data.settings.syncIntervalMinutes * 60000;
+  let nextEmailAt = now() + 60000;
   const interval = setInterval(() => {
     if (store.data.settings.autoSync && Date.now() >= nextAutoAt && !sync.running && !loginJobs.size) {
       nextAutoAt = Date.now() + store.data.settings.syncIntervalMinutes * 60000;
       runSync(undefined, false, true);
+    }
+    if (now() >= nextEmailAt) {
+      nextEmailAt = now() + 60000;
+      background(checkEmailReminders());
     }
   }, 15000);
   interval.unref();
@@ -150,10 +184,14 @@ export async function createApplication({ dataDir = path.join(ROOT, 'data'), bro
         try { body = raw ? JSON.parse(raw) : {}; if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error(); }
         catch { return send(400, { error: 'JSON 格式错误。' }); }
       }
-      if (req.method === 'GET' && pathname === '/api/state') return send(200, {
-        ...store.data, platforms: store.data.platforms.map(p => ({ ...p, configured: vault.configured(p.id), authOpen: browser.isOpen(p.id) })),
-        sync: { ...sync, loginPlatforms: [...loginJobs] }, capabilities: { browserAvailable: browser.browserAvailable, ocrAvailable: browser.ocrAvailable === true },
-      });
+      if (req.method === 'GET' && pathname === '/api/state') {
+        const { emailSent, ...publicState } = store.data;
+        return send(200, {
+          ...publicState, emailSettings: { ...store.data.emailSettings, passwordConfigured: Boolean(emailPassword()), sending: emailSending },
+          platforms: store.data.platforms.map(p => ({ ...p, configured: vault.configured(p.id), authOpen: browser.isOpen(p.id) })),
+          sync: { ...sync, loginPlatforms: [...loginJobs] }, capabilities: { browserAvailable: browser.browserAvailable, ocrAvailable: browser.ocrAvailable === true },
+        });
+      }
       if (req.method === 'GET' && pathname === '/api/export.ics') {
         res.writeHead(200, { 'Content-Type': 'text/calendar; charset=utf-8', 'Content-Disposition': 'attachment; filename="homework.ics"', 'Cache-Control': 'no-store' });
         return res.end(exportIcs(store.data.assignments));
@@ -166,6 +204,36 @@ export async function createApplication({ dataDir = path.join(ROOT, 'data'), bro
       if (req.method === 'POST' && pathname === '/api/sync') {
         if (body.platform && !store.platform(body.platform)) return send(400, { error: '未知平台。' });
         return await runSync(body.platform) ? send(202, { ok: true }) : send(409, { error: '正在同步或登录，请稍候。' });
+      }
+      if (req.method === 'PUT' && pathname === '/api/email-settings') {
+        if (emailSending) return send(409, { error: '邮件正在发送，请稍候修改设置。' });
+        const settings = normalizeEmailSettings(body, store.data.emailSettings, now());
+        if (body.password !== undefined && (typeof body.password !== 'string' || body.password.length > 500)) return send(400, { error: 'SMTP 密码格式不正确。' });
+        const stored = vault.get('email');
+        if (stored.password && stored.username !== settings.username && !body.password)
+          return send(400, { error: '更换 SMTP 账号时请同时填写新密码。' });
+        if (settings.enabled && !(body.password || stored.username === settings.username && stored.password))
+          return send(400, { error: '启用邮件提醒前，请填写 SMTP 密码或授权码。' });
+        if (body.password) await vault.set('email', { username: settings.username, password: body.password });
+        await store.updateEmailSettings(settings);
+        nextEmailAt = now() + 15000;
+        return send(200, { ok: true });
+      }
+      if (req.method === 'POST' && pathname === '/api/email-test') {
+        const settings = store.data.emailSettings;
+        const password = emailPassword();
+        if (emailSending) return send(409, { error: '邮件正在发送，请稍候。' });
+        if (!settings.host || !settings.from || !settings.to || !password) return send(400, { error: '请先保存完整的 SMTP 与收件设置。' });
+        emailSending = true;
+        try {
+          const result = await mailSender(settings, password, { subject: '【作业提醒】测试邮件', text: '邮件设置已连通。此邮件由本机作业聚合系统发送，不包含作业数据。' });
+          if (result?.rejected?.length) throw new Error('SMTP rejected recipient');
+          await store.updateEmailStatus({ lastTestAt: new Date(now()).toISOString(), lastError: '' });
+          return send(200, { ok: true });
+        } catch {
+          await store.updateEmailStatus({ lastError: '测试邮件发送失败，请检查 SMTP 配置与网络。' });
+          return send(502, { error: '测试邮件发送失败，请检查 SMTP 配置与网络。' });
+        } finally { emailSending = false; }
       }
       const platformRoute = pathname.match(/^\/api\/platforms\/(\w+)\/(login|collect|credentials|authenticate|verify)$/);
       if (platformRoute && req.method === 'POST') {
@@ -231,7 +299,7 @@ export async function createApplication({ dataDir = path.join(ROOT, 'data'), bro
       send(404, { error: '未找到资源。' });
     } catch (error) { send(400, { error: vault.redact(error.message || '请求处理失败。') }); }
   });
-  return { server, store, vault, browser, runSync, runAuth, close: closeApplication };
+  return { server, store, vault, browser, runSync, runAuth, checkEmailReminders, close: closeApplication };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

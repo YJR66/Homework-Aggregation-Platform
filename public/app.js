@@ -137,9 +137,10 @@
   async function api(path, options = {}) {
     // Keep every UI request bounded; a hung local service must not freeze actions.
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
+    const { timeoutMs = 30000, ...requestOptions } = options;
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(path, { ...options, headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers }, cache: 'no-store', signal: controller.signal });
+      const response = await fetch(path, { ...requestOptions, headers: { ...(requestOptions.body ? { 'Content-Type': 'application/json' } : {}), ...requestOptions.headers }, cache: 'no-store', signal: controller.signal });
       const body = await response.json().catch(() => ({}));
       if (!response.ok || body.ok === false) throw new Error(body.error?.message || body.error || body.message || `请求失败（${response.status}）`);
       return body;
@@ -219,6 +220,8 @@
       const count = counts.byPlatform[platform.id] || 0;
       return `<button class="nav-item ${model.platform === platform.id ? 'active' : ''}" data-platform-filter="${escapeHtml(platform.id)}" aria-pressed="${model.platform === platform.id}"><span class="platform-dot" style="background:${meta.color}"></span><span>${escapeHtml(meta.name)}</span><span class="platform-count">${count}</span></button>`;
     }).join('');
+    const email = model.data?.emailSettings;
+    $('#email-nav-status').textContent = email?.lastError ? '失败' : email?.enabled ? '已启用' : '';
     $$('.primary-nav .nav-item').forEach((button) => {
       const selected = !model.platform && (model.tab === 'completed' ? button.dataset.view === 'completed' : model.due === 'upcoming' ? button.dataset.view === 'upcoming' : button.dataset.view === 'all');
       button.classList.toggle('active', selected);
@@ -417,6 +420,46 @@
     $('#settings-dialog').showModal();
     closeSidebar();
   }
+  function emailRuleMarkup(rule) {
+    const unit = rule.minutes && rule.minutes % 1440 === 0 ? 1440 : rule.minutes && rule.minutes % 60 === 0 ? 60 : 1;
+    const amount = rule.minutes / unit;
+    const selected = (value, current) => value === current ? 'selected' : '';
+    return `<div class="email-rule" data-rule-id="${escapeHtml(rule.id)}"><label>发送时间<select data-mail-rule="kind"><option value="before" ${selected('before', rule.kind)}>截止前</option><option value="after" ${selected('after', rule.kind)}>截止后</option></select></label><label>间隔<input data-mail-rule="amount" type="number" min="0" max="525600" step="1" required value="${amount}"></label><label>单位<select data-mail-rule="unit"><option value="1" ${selected(1, unit)}>分钟</option><option value="60" ${selected(60, unit)}>小时</option><option value="1440" ${selected(1440, unit)}>天</option></select></label><label>平台<select data-mail-rule="platform"><option value="all" ${selected('all', rule.platform)}>全部平台</option>${Object.entries(PLATFORM_META).map(([id, meta]) => `<option value="${id}" ${selected(id, rule.platform)}>${meta.name}</option>`).join('')}</select></label><button class="icon-button email-rule-remove" type="button" data-remove-email-rule aria-label="删除提醒规则">${icon('close')}</button></div>`;
+  }
+  function renderEmailRules(rules) {
+    $('#email-rules').innerHTML = rules.length ? rules.map(emailRuleMarkup).join('') : '<p class="email-rules-empty">尚未添加规则。启用前请至少添加一条。</p>';
+  }
+  function openEmailSettings() {
+    const settings = model.data?.emailSettings || {};
+    $('#email-form').reset();
+    $('#email-error').hidden = true;
+    $('#email-enabled').checked = settings.enabled === true;
+    $('#email-host').value = settings.host || '';
+    $('#email-port').value = settings.port || 465;
+    $('#email-security').value = settings.secure === false ? 'starttls' : 'ssl';
+    $('#email-username').value = settings.username || '';
+    $('#email-password').value = '';
+    $('#email-password').placeholder = settings.passwordConfigured ? '留空沿用已保存密码' : '请输入密码或授权码';
+    $('#email-from').value = settings.from || '';
+    $('#email-to').value = settings.to || '';
+    $('#email-freshness').value = settings.freshnessMinutes || 120;
+    $('#test-email').disabled = !settings.passwordConfigured || settings.sending === true;
+    const status = [settings.lastSentAt ? `上次提醒：${formatDate(settings.lastSentAt)}` : '',
+      settings.lastTestAt ? `上次测试：${formatDate(settings.lastTestAt)}` : '', settings.lastError || ''].filter(Boolean);
+    $('#email-delivery-status').textContent = status.join(' · ');
+    renderEmailRules(Array.isArray(settings.rules) ? settings.rules : []);
+    $('#email-dialog').showModal();
+    closeSidebar();
+  }
+  function collectEmailRules() {
+    return $$('#email-rules .email-rule').map((row) => {
+      const amount = Number(row.querySelector('[data-mail-rule="amount"]').value);
+      const unit = Number(row.querySelector('[data-mail-rule="unit"]').value);
+      if (!Number.isInteger(amount) || amount < 0 || ![1, 60, 1440].includes(unit)) throw new Error('提醒时间须为非负整数。');
+      return { id: row.dataset.ruleId, kind: row.querySelector('[data-mail-rule="kind"]').value,
+        minutes: amount * unit, platform: row.querySelector('[data-mail-rule="platform"]').value };
+    });
+  }
   async function platformAction(platformId, action) {
     const platform = getPlatform(platformId);
     if (!platform || platformBusy(platform)) return;
@@ -536,6 +579,7 @@
   $('#sync-all').addEventListener('click', () => void syncAll());
   $('#retry-state').addEventListener('click', () => void refresh(true));
   $('#open-settings').addEventListener('click', openSettings);
+  $('#open-email-settings').addEventListener('click', openEmailSettings);
   $('#mobile-menu').addEventListener('click', () => {
     $('#sidebar').inert = false;
     $('#sidebar').classList.add('open');
@@ -550,6 +594,54 @@
     if (event.target === dialog && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) dialog.close();
   }));
   $('#credentials-dialog').addEventListener('close', () => $('#credentials-form').reset());
+  $('#email-dialog').addEventListener('close', () => { $('#email-form').reset(); $('#email-password').value = ''; });
+  $('#add-email-rule').addEventListener('click', () => {
+    if ($$('#email-rules .email-rule').length >= 12) { $('#email-error').textContent = '最多添加 12 条规则。'; $('#email-error').hidden = false; return; }
+    $('#email-rules .email-rules-empty')?.remove();
+    $('#email-rules').insertAdjacentHTML('beforeend', emailRuleMarkup({ id: crypto.randomUUID(), kind: 'before', minutes: 1440, platform: 'all' }));
+    $('#email-error').hidden = true;
+  });
+  $('#email-rules').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-remove-email-rule]');
+    if (!button) return;
+    button.closest('.email-rule').remove();
+    if (!$('#email-rules .email-rule')) renderEmailRules([]);
+  });
+  $('#email-security').addEventListener('change', () => {
+    if (['465', '587'].includes($('#email-port').value)) $('#email-port').value = $('#email-security').value === 'ssl' ? 465 : 587;
+  });
+  $('#email-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!event.currentTarget.reportValidity()) return;
+    $('#email-error').hidden = true;
+    let body;
+    try {
+      body = { enabled: $('#email-enabled').checked, host: $('#email-host').value.trim(), port: Number($('#email-port').value),
+        secure: $('#email-security').value === 'ssl', username: $('#email-username').value.trim(),
+        from: $('#email-from').value.trim(), to: $('#email-to').value.trim(),
+        freshnessMinutes: Number($('#email-freshness').value), rules: collectEmailRules() };
+      if ($('#email-password').value) body.password = $('#email-password').value;
+      $('#save-email').disabled = true;
+      await api('/api/email-settings', { method: 'PUT', body: JSON.stringify(body) });
+      await refresh(true);
+      $('#email-password').placeholder = '留空沿用已保存密码';
+      $('#test-email').disabled = !Boolean(body.password || model.data?.emailSettings?.passwordConfigured);
+      $('#email-delivery-status').textContent = '设置已保存。可以发送测试邮件。';
+      toast('邮件提醒设置已保存。');
+    } catch (error) { $('#email-error').textContent = error.message; $('#email-error').hidden = false; }
+    finally { if (body) body.password = ''; $('#email-password').value = ''; $('#save-email').disabled = false; }
+  });
+  $('#test-email').addEventListener('click', async () => {
+    $('#test-email').disabled = true;
+    $('#email-error').hidden = true;
+    try {
+      await api('/api/email-test', { method: 'POST', body: '{}', timeoutMs: 60000 });
+      $('#email-delivery-status').textContent = '测试邮件已提交给 SMTP 服务器，请检查收件箱。';
+      toast('测试邮件已发送。');
+      await refresh(true);
+    } catch (error) { $('#email-error').textContent = error.message; $('#email-error').hidden = false; }
+    finally { $('#test-email').disabled = false; }
+  });
   $('#credentials-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!event.currentTarget.reportValidity()) return;
