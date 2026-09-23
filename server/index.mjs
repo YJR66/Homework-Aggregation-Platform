@@ -38,6 +38,7 @@ export async function createApplication({ dataDir = path.join(ROOT, 'data'), bro
   const browser = browserFactory ? browserFactory(browserOptions) : new BrowserManager(browserOptions);
   let closed = false;
   let emailSending = false;
+  let emailConfigSaving = false;
   const jobs = new Set();
   function background(promise) { jobs.add(promise); promise.catch(() => {}).finally(() => jobs.delete(promise)); }
   const emailPassword = () => {
@@ -45,7 +46,7 @@ export async function createApplication({ dataDir = path.join(ROOT, 'data'), bro
     return saved.username === store.data.emailSettings.username ? saved.password : '';
   };
   async function checkEmailReminders() {
-    if (closed || emailSending || !store.data.emailSettings.enabled) return false;
+    if (closed || emailSending || emailConfigSaving || !store.data.emailSettings.enabled) return false;
     const settings = store.data.emailSettings;
     const password = emailPassword();
     if (!password) return false;
@@ -206,23 +207,26 @@ export async function createApplication({ dataDir = path.join(ROOT, 'data'), bro
         return await runSync(body.platform) ? send(202, { ok: true }) : send(409, { error: '正在同步或登录，请稍候。' });
       }
       if (req.method === 'PUT' && pathname === '/api/email-settings') {
-        if (emailSending) return send(409, { error: '邮件正在发送，请稍候修改设置。' });
-        const settings = normalizeEmailSettings(body, store.data.emailSettings, now());
-        if (body.password !== undefined && (typeof body.password !== 'string' || body.password.length > 500)) return send(400, { error: 'SMTP 密码格式不正确。' });
-        const stored = vault.get('email');
-        if (stored.password && stored.username !== settings.username && !body.password)
-          return send(400, { error: '更换 SMTP 账号时请同时填写新密码。' });
-        if (settings.enabled && !(body.password || stored.username === settings.username && stored.password))
-          return send(400, { error: '启用邮件提醒前，请填写 SMTP 密码或授权码。' });
-        if (body.password) await vault.set('email', { username: settings.username, password: body.password });
-        await store.updateEmailSettings(settings);
-        nextEmailAt = now() + 15000;
-        return send(200, { ok: true });
+        if (emailSending || emailConfigSaving) return send(409, { error: '邮件设置或发送正在进行，请稍候。' });
+        emailConfigSaving = true;
+        try {
+          const settings = normalizeEmailSettings(body, store.data.emailSettings, now());
+          if (body.password !== undefined && (typeof body.password !== 'string' || body.password.length > 500)) return send(400, { error: 'SMTP 密码格式不正确。' });
+          const stored = vault.get('email');
+          if (stored.password && stored.username !== settings.username && !body.password)
+            return send(400, { error: '更换 SMTP 账号时请同时填写新密码。' });
+          if (settings.enabled && !(body.password || stored.username === settings.username && stored.password))
+            return send(400, { error: '启用邮件提醒前，请填写 SMTP 密码或授权码。' });
+          if (body.password) await vault.set('email', { username: settings.username, password: body.password });
+          await store.updateEmailSettings(settings);
+          nextEmailAt = now() + 15000;
+          return send(200, { ok: true });
+        } finally { emailConfigSaving = false; }
       }
       if (req.method === 'POST' && pathname === '/api/email-test') {
         const settings = store.data.emailSettings;
         const password = emailPassword();
-        if (emailSending) return send(409, { error: '邮件正在发送，请稍候。' });
+        if (emailSending || emailConfigSaving) return send(409, { error: '邮件设置或发送正在进行，请稍候。' });
         if (!settings.host || !settings.from || !settings.to || !password) return send(400, { error: '请先保存完整的 SMTP 与收件设置。' });
         emailSending = true;
         try {

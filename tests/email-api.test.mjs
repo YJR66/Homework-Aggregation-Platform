@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { createApplication } from '../server/index.mjs';
@@ -123,4 +123,60 @@ test('failed SMTP delivery is not marked sent and is retried after recovery', as
   assert.equal(await f.app.checkEmailReminders(), true);
   assert.equal(f.calls.length, 2);
   assert.equal(Object.keys(f.app.store.data.emailSent).length, 1);
+});
+
+test('saving SMTP credentials excludes concurrent settings changes and sends', async t => {
+  const f = await fixture(t);
+  let entered;
+  const started = new Promise(resolve => { entered = resolve; });
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const originalSet = f.app.vault.set.bind(f.app.vault);
+  f.app.vault.set = async (...args) => { entered(); await gate; return originalSet(...args); };
+  const saving = f.request('/api/email-settings', 'PUT', { ...settings(), password: PASSWORD });
+  await started;
+  assert.equal((await f.request('/api/email-settings', 'PUT', { ...settings(), password: PASSWORD })).status, 409);
+  assert.equal((await f.request('/api/email-test', 'POST', {})).status, 409);
+  release();
+  assert.equal((await saving).status, 200);
+  assert.equal(f.app.store.data.emailSettings.enabled, true);
+  assert.equal(f.calls.length, 0);
+});
+
+test('real Windows vault encrypts mail credentials and reloads them after restart', { skip: process.platform !== 'win32' }, async t => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'homework-email-vault-'));
+  let app;
+  const sent = [];
+  const start = async () => {
+    app = await createApplication({ dataDir: dir,
+      browserFactory: () => ({ browserAvailable: true, ocrAvailable: false, isOpen: () => false, close: async () => {} }),
+      mailSender: async (_config, password) => { sent.push(password); return {}; },
+    });
+    await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
+    return `http://127.0.0.1:${app.server.address().port}`;
+  };
+  t.after(async () => {
+    await app?.close();
+    assert.ok(path.resolve(dir).startsWith(path.resolve(os.tmpdir()) + path.sep));
+    await rm(dir, { recursive: true, force: true });
+  });
+  const first = await start();
+  const save = await fetch(first + '/api/email-settings', { method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ ...settings({ enabled: false }), password: PASSWORD }),
+  });
+  assert.equal(save.status, 200);
+  const encrypted = await readFile(path.join(dir, 'credentials.dpapi.json'), 'utf8');
+  assert.ok(!encrypted.includes(PASSWORD));
+  await app.close();
+
+  const second = await start();
+  const state = await (await fetch(second + '/api/state')).json();
+  assert.equal(state.emailSettings.passwordConfigured, true);
+  assert.ok(!JSON.stringify(state).includes(PASSWORD));
+  const testMail = await fetch(second + '/api/email-test', { method: 'POST',
+    headers: { 'content-type': 'application/json' }, body: '{}',
+  });
+  assert.equal(testMail.status, 200);
+  assert.deepEqual(sent, [PASSWORD]);
 });
