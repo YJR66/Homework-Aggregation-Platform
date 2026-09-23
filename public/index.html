@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f5f6f7">
+  <title>作业清单</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='8' fill='%23253643'/%3E%3Cpath d='M12 16h24M12 24h24M12 32h15' fill='none' stroke='white' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 7a7 7 0 0 1 11.7-1L20 9M4 15l2.2 3A7 7 0 0 0 18 17"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="m9 3-.8 2.7-2.7.7L4 9l1.8 2v2L4 15l1.5 2.6 2.7.7L9 21h6l.8-2.7 2.7-.7L20 15l-1.8-2v-2L20 9l-1.5-2.6-2.7-.7L15 3Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6m0-6L10 14m0-10H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="m10 13 4-4m-5 6-2 2a4.2 4.2 0 0 1-6-6l4-4a4.2 4.2 0 0 1 6 0m2 2 2-2a4.2 4.2 0 1 1 6 6l-4 4a4.2 4.2 0 0 1-6 0" transform="translate(1 1) scale(.9)"/></symbol>
+    <symbol id="i-warning" viewBox="0 0 24 24"><path d="m10.3 4-8 14a2 2 0 0 0 1.7 3h16a2 2 0 0 0 1.7-3l-8-14a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4m0 4h.01"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 5v16M3 3h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5v15h-5a4 4 0 0 0-4 3 4 4 0 0 0-4-3H3Z"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7Z"/><path d="m8 12 3 3 5-6"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  </svg>
+
+  <aside class="sidebar" id="sidebar">
+    <a class="brand" href="/" aria-label="作业清单首页">作业清单</a>
+    <div class="nav-caption">视图</div>
+    <nav class="primary-nav" aria-label="作业导航">
+      <button class="nav-item active" data-view="all"><svg class="icon"><use href="#i-grid"/></svg><span>作业总览</span><span class="nav-count" id="nav-all-count">0</span></button>
+      <button class="nav-item" data-view="upcoming"><svg class="icon"><use href="#i-clock"/></svg><span>即将截止</span><span class="nav-count" id="nav-upcoming-count">0</span></button>
+      <button class="nav-item" data-view="completed"><svg class="icon"><use href="#i-check"/></svg><span>已完成</span><span class="nav-count" id="nav-completed-count">0</span></button>
+    </nav>
+    <div class="nav-caption platform-caption">平台筛选</div>
+    <nav class="platform-nav" id="platform-nav" aria-label="按平台筛选"></nav>
+    <div class="sidebar-bottom">
+      <button class="nav-item" id="open-settings"><svg class="icon"><use href="#i-settings"/></svg><span>同步设置</span></button>
+      <div class="local-privacy">数据保存在本机</div>
+    </div>
+  </aside>
+  <button class="sidebar-backdrop" id="sidebar-backdrop" aria-label="关闭导航" hidden></button>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="breadcrumb"><button class="icon-button mobile-menu" id="mobile-menu" aria-label="打开导航"><svg class="icon"><use href="#i-menu"/></svg></button><strong id="breadcrumb-view">作业总览</strong></div>
+      <div class="topbar-right"><span class="today-date" id="today-date"></span></div>
+    </header>
+
+    <div class="page-content">
+      <section class="page-heading">
+        <div><h1 id="page-title">作业总览</h1><p id="page-description">汇总四个平台的当前作业和学习任务。</p></div>
+        <button class="button primary" id="sync-all"><svg class="icon"><use href="#i-refresh"/></svg><span>同步全部作业</span></button>
+      </section>
+
+      <div class="error-banner" id="connection-error" role="alert" hidden><svg class="icon"><use href="#i-warning"/></svg><span id="connection-error-text"></span><button class="text-button" id="retry-state">重试</button></div>
+      <div class="sync-banner" id="sync-banner" role="status" hidden><span class="spinner"></span><span id="sync-message">正在读取平台作业…</span></div>
+
+      <section class="stats-grid" aria-label="作业统计">
+        <button class="stat-card stat-pending" data-stat="pending"><span class="stat-top">待完成</span><span class="stat-value" id="stat-pending">0</span><span class="stat-caption">需继续处理</span></button>
+        <button class="stat-card" data-stat="upcoming"><span class="stat-top">7 天内截止</span><span class="stat-value" id="stat-upcoming">0</span><span class="stat-caption">按截止时间统计</span></button>
+        <button class="stat-card" data-stat="overdue"><span class="stat-top">已逾期</span><span class="stat-value" id="stat-overdue">0</span><span class="stat-caption">截止时间已过</span></button>
+        <button class="stat-card" data-stat="completed"><span class="stat-top">已完成</span><span class="stat-value" id="stat-completed">0</span><span class="stat-caption">平台已确认</span></button>
+      </section>
+
+      <div class="workspace-grid">
+        <section class="assignments-panel" aria-labelledby="assignments-title">
+          <div class="panel-heading"><div class="panel-title"><h2 id="assignments-title">作业清单</h2><span class="count-pill" id="result-count">0 项</span></div><a class="icon-text-link" href="/api/export.ics" download="homework.ics" title="导出带截止时间的作业到日历"><svg class="icon"><use href="#i-download"/></svg><span>导出日历</span></a></div>
+          <div class="list-tabs" role="tablist" aria-label="完成状态筛选"><button class="list-tab active" role="tab" aria-selected="true" data-tab="pending">待完成 <span id="tab-pending-count">0</span></button><button class="list-tab" role="tab" aria-selected="false" data-tab="completed">已完成 <span id="tab-completed-count">0</span></button><button class="list-tab" role="tab" aria-selected="false" data-tab="all">全部</button></div>
+          <div class="list-controls"><label class="search-field"><svg class="icon"><use href="#i-search"/></svg><input id="search" type="search" placeholder="搜索作业、课程…" aria-label="搜索作业或课程" autocomplete="off"></label><select id="due-filter" aria-label="筛选截止日期"><option value="all">所有时间</option><option value="upcoming">未来 7 天</option><option value="overdue">已逾期</option><option value="undated">无截止时间</option></select><select id="sort-order" aria-label="作业排序"><option value="due">截止时间 ↑</option><option value="newest">最近发现</option><option value="course">按课程排序</option></select></div>
+          <div class="filter-summary" id="filter-summary" hidden><span id="filter-summary-text"></span><button class="text-button" id="clear-filters">清除筛选 <span aria-hidden="true">×</span></button></div>
+          <div class="assignments-list" id="assignments-list" aria-live="polite"><div class="loading-state"><span class="spinner"></span><span>正在读取作业清单…</span></div></div>
+          <div class="list-footer"><span>完成状态以平台记录为准；勾选后重新核验</span><span id="list-update-time">尚未同步</span></div>
+        </section>
+
+        <aside class="right-rail">
+          <section class="connections-panel" id="connections" aria-labelledby="connections-title"><div class="panel-heading"><div class="panel-title"><h2 id="connections-title">平台连接</h2></div><span class="connection-count" id="connection-count">0 / 4</span></div><p class="panel-subtitle">分别显示登录和读取结果</p><div id="platform-cards"></div><div class="connection-footer"><div><span>登录状态保存在本机浏览器</span><span class="ocr-status" id="ocr-status">正在检查本地文字识别能力…</span></div></div></section>
+        </aside>
+      </div>
+      <footer class="page-footer"><span>数据保存在本机</span><span>只读取平台信息，不提交作业</span></footer>
+    </div>
+  </main>
+
+  <dialog class="modal" id="credentials-dialog" aria-labelledby="credentials-title"><form id="credentials-form"><div class="modal-header"><div><h2 id="credentials-title">连接平台</h2></div><button class="icon-button" type="button" data-close-dialog="credentials-dialog" aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button></div><p class="modal-description" id="credentials-description">保存账号后自动登录并同步作业。</p><input id="credential-platform" type="hidden"><div class="form-grid"><label>平台账号<input id="credential-username" name="username" autocomplete="username" required placeholder="请输入平台账号"></label><label>平台密码<input id="credential-password" name="password" type="password" autocomplete="new-password" required placeholder="请输入密码，不会回显已保存密码"></label></div><fieldset id="vpn-fields" hidden><legend>学校统一身份认证</legend><div class="form-grid"><label>统一认证账号<input id="credential-vpn-username" name="vpnUsername" autocomplete="off" placeholder="请输入学号"></label><label>统一认证密码<input id="credential-vpn-password" name="vpnPassword" type="password" autocomplete="new-password" placeholder="请输入统一认证密码"></label><label class="full-width">希冀 / WebVPN 入口<input id="credential-entry" name="entryUrl" type="url" autocomplete="off" placeholder="https://vpn.neuq.edu.cn/…"></label></div></fieldset><div class="form-note"><svg class="icon"><use href="#i-shield"/></svg><span>希冀图片验证码支持本机识别；短信、扫码等验证需要手动完成。</span></div><p class="form-error" id="credentials-error" role="alert" hidden></p><div class="modal-actions"><button type="button" class="button secondary" data-close-dialog="credentials-dialog">取消</button><button class="button primary" id="save-credentials" type="submit">保存并尝试登录</button></div></form></dialog>
+
+  <dialog class="modal small-modal" id="settings-dialog" aria-labelledby="settings-title"><form id="settings-form"><div class="modal-header"><div><h2 id="settings-title">同步设置</h2></div><button class="icon-button" type="button" data-close-dialog="settings-dialog" aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button></div><p class="modal-description">服务运行且登录有效时，按设定间隔同步。</p><label class="toggle-row"><span><strong>自动同步</strong><small>定时检查新作业</small></span><input type="checkbox" id="auto-sync"><span class="switch" aria-hidden="true"></span></label><label class="form-label interval-label">同步间隔 <span class="input-with-suffix"><input id="sync-interval" type="number" min="5" max="1440" step="1" required value="30"><span>分钟</span></span></label><div class="form-note"><svg class="icon"><use href="#i-clock"/></svg><span>登录过期时使用「自动登录」；需要短信、扫码等验证时使用「人工辅助」。</span></div><p class="form-error" id="settings-error" role="alert" hidden></p><div class="modal-actions"><button class="button secondary" type="button" data-close-dialog="settings-dialog">取消</button><button class="button primary" id="save-settings" type="submit">保存设置</button></div></form></dialog>
+  <div class="toast-container" id="toasts" aria-live="polite" aria-atomic="false"></div>
+</body>
+</html>

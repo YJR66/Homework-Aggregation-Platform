@@ -1,0 +1,23 @@
+node_modules/
+data/
+.env
+.env.*
+!.env.example
+.playwright-cli/
+output/
+*.log
+*.zip
+__pycache__/
+*.pyc
+# Keep future exports of local credentials or browser state out of commits.
+*.dpapi
+*.dpapi.json
+*.sqlite
+*.sqlite3
+*.pem
+*.pfx
+*.p12
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
