@@ -263,7 +263,7 @@ export class BrowserManager {
     session.deadline = deadline;
     session.attempts.clear(); session.filled.clear(); session.lastStatus = '';
     this.onStatus(platform.id, { loginStatus: 'authenticating', authMessage: '正在检查登录状态…', authOpen: session.interactive });
-    let result = { authenticated: null, reason: '登录验证超时，请重试验证登录。' };
+    let result = { authenticated: null, reason: '登录验证超时，请重新填写账号密码或点击「已保存账号登录」。' };
     try {
       if (Date.now() >= deadline) return this.#recordAuth(platform, result);
       result = await this.verifySession(platform, { navigate, deadline, waitMs: Math.min(8000, deadline - Date.now()), navigationTimeoutMs: Math.min(30000, Math.max(1, deadline - Date.now())) });

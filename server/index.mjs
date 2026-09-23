@@ -189,10 +189,13 @@ export async function createApplication({ dataDir = path.join(ROOT, 'data'), bro
         const credentials = {};
         for (const field of ['username', 'password', 'vpnUsername', 'vpnPassword']) {
           if (body[field] !== undefined && (typeof body[field] !== 'string' || body[field].length > 500)) return send(400, { error: '账号或密码格式不正确。' });
-          if (body[field]) credentials[field] = body[field];
+          if (body[field]) credentials[field] = field.endsWith('Username') || field === 'username' ? body[field].trim() : body[field];
         }
         const entryUrl = body.entryUrl ? validateEntryUrl(id, body.entryUrl) : platform.entryUrl;
-        if (!credentials.username || (!credentials.password && !vault.configured(id))) return send(400, { error: '请填写账号和密码。' });
+        // This endpoint is the explicit credential-login path. A previous
+        // encrypted password must not silently satisfy an empty login form.
+        if (!credentials.username || !credentials.password) return send(400, { error: '请填写账号和密码。' });
+        if (id === 'xiji' && (!credentials.vpnUsername || !credentials.vpnPassword)) return send(400, { error: '请填写学校统一身份认证账号和密码。' });
         const oldUsername = vault.get(id)?.username;
         if (oldUsername && oldUsername !== credentials.username) return send(409, { error: '该工作区已绑定其他账号。请使用独立工作区，避免混入旧账号的作业和登录态。' });
         loginJobs.add(id);

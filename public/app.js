@@ -273,14 +273,14 @@
       const disabled = busy ? 'disabled' : '';
       let actions;
       if (!platform.configured) {
-        actions = `<button class="button small secondary" data-action="configure" data-platform="${platform.id}" ${disabled}>${icon('link')}配置账号</button><button class="button small subtle" data-action="verify" data-platform="${platform.id}" ${disabled}>${icon('shield')}验证登录</button>`;
+        actions = `<button class="button small secondary" data-action="configure" data-platform="${platform.id}" ${disabled}>${icon('link')}账号密码登录</button>`;
       } else {
-        actions = `<button class="button small secondary" data-action="authenticate" data-platform="${platform.id}" ${disabled}>${authBusy ? '<span class="spinner"></span>' : icon('link')}${authBusy ? '正在验证…' : '自动登录'}</button><button class="button small subtle" data-action="verify" data-platform="${platform.id}" ${disabled}>${icon('shield')}验证登录</button><button class="button small subtle" data-action="login" data-platform="${platform.id}" ${disabled}>${icon('external')}${platform.authOpen ? '查看辅助窗口' : '人工辅助'}</button><button class="button small subtle" data-action="collect" data-platform="${platform.id}" ${disabled}>${status === 'syncing' ? '<span class="spinner"></span>' : icon('refresh')}读取作业</button>`;
+        actions = `<button class="button small secondary" data-action="configure" data-platform="${platform.id}" ${disabled}>${icon('link')}账号密码登录</button><button class="button small subtle" data-action="authenticate" data-platform="${platform.id}" ${disabled}>${authBusy ? '<span class="spinner"></span>' : icon('shield')}${authBusy ? '正在登录…' : '已保存账号登录'}</button><button class="button small subtle" data-action="login" data-platform="${platform.id}" ${disabled}>${icon('external')}${platform.authOpen ? '查看辅助窗口' : '人工辅助'}</button><button class="button small subtle" data-action="collect" data-platform="${platform.id}" ${disabled}>${status === 'syncing' ? '<span class="spinner"></span>' : icon('refresh')}读取作业</button>`;
       }
-      const authMessage = platform.authMessage || (!platform.configured ? '保存后尝试登录；登录成功后同步作业。' : loginStatus === 'unknown' ? '“验证登录”只检查当前会话，不提交账号密码。' : '');
+      const authMessage = platform.authMessage || (!platform.configured ? '填写账号密码后自动登录，成功后读取作业。' : loginStatus === 'unknown' ? '可填写账号密码登录，或使用本机已保存的账号。' : '');
       const authCheck = asDate(platform.lastAuthCheckAt);
       const message = platform.message || (status === 'connected' ? `已读取 ${platform.assignmentCount ?? assignments().filter((assignment) => assignment.platform === platform.id).length} 项任务` : status === 'partial' ? '部分任务未能读取' : status === 'error' ? '作业读取失败' : status === 'auth_required' ? '请先登录' : '尚未读取作业');
-      return `<article class="platform-card"><div class="platform-card-top"><span class="platform-logo ${platform.id}" style="background:${meta.background};color:${meta.color}">${meta.short}</span><div class="platform-info"><span class="platform-name">${escapeHtml(meta.name)}</span></div><button class="icon-button" title="配置${escapeHtml(meta.name)}账号" aria-label="配置${escapeHtml(meta.name)}账号" data-action="configure" data-platform="${platform.id}" ${disabled}>${icon('settings')}</button></div><div class="platform-auth-block"><span class="platform-login-state ${loginStatus}">${authBusy ? '<span class="spinner"></span>' : '<span class="status-dot"></span>'}${escapeHtml(LOGIN_LABELS[loginStatus])}</span><span class="auth-check-time">验证时间：${authCheck ? `<time datetime="${authCheck.toISOString()}">${escapeHtml(formatDate(authCheck))}</time>` : '尚未验证'}</span>${authMessage ? `<p class="platform-auth-message">${escapeHtml(authMessage)}</p>` : ''}</div><span class="platform-state ${escapeHtml(status)}"><span class="status-dot"></span>作业采集：${escapeHtml(STATUS_LABELS[status] || '等待同步')}${platform.lastSyncAt ? ` · ${escapeHtml(relativeTime(platform.lastSyncAt))}` : ''}</span>${message ? `<p class="platform-message ${status === 'error' ? 'error' : ''}">${escapeHtml(message)}</p>` : ''}<div class="platform-actions">${actions}</div></article>`;
+      return `<article class="platform-card"><div class="platform-card-top"><span class="platform-logo ${platform.id}" style="background:${meta.background};color:${meta.color}">${meta.short}</span><div class="platform-info"><span class="platform-name">${escapeHtml(meta.name)}</span></div><button class="icon-button" title="填写${escapeHtml(meta.name)}账号密码" aria-label="填写${escapeHtml(meta.name)}账号密码" data-action="configure" data-platform="${platform.id}" ${disabled}>${icon('settings')}</button></div><div class="platform-auth-block"><span class="platform-login-state ${loginStatus}">${authBusy ? '<span class="spinner"></span>' : '<span class="status-dot"></span>'}${escapeHtml(LOGIN_LABELS[loginStatus])}</span><span class="auth-check-time">验证时间：${authCheck ? `<time datetime="${authCheck.toISOString()}">${escapeHtml(formatDate(authCheck))}</time>` : '尚未验证'}</span>${authMessage ? `<p class="platform-auth-message">${escapeHtml(authMessage)}</p>` : ''}</div><span class="platform-state ${escapeHtml(status)}"><span class="status-dot"></span>作业采集：${escapeHtml(STATUS_LABELS[status] || '等待同步')}${platform.lastSyncAt ? ` · ${escapeHtml(relativeTime(platform.lastSyncAt))}` : ''}</span>${message ? `<p class="platform-message ${status === 'error' ? 'error' : ''}">${escapeHtml(message)}</p>` : ''}<div class="platform-actions">${actions}</div></article>`;
     }).join('');
     if (focusTarget) {
       $$('#platform-cards button').find((button) => button.dataset.action === focusTarget.action && button.dataset.platform === focusTarget.platform)?.focus({ preventScroll: true });
@@ -291,12 +291,12 @@
     const authenticating = loginJobs().length > 0;
     $('#sync-all').disabled = running || authenticating || model.busy.size > 0;
     $('#sync-all .icon').classList.toggle('spinning', running);
-    $('#sync-all span').textContent = running ? '正在同步…' : authenticating ? '正在验证登录…' : '同步全部作业';
+    $('#sync-all span').textContent = running ? '正在同步…' : authenticating ? '正在登录…' : '同步全部作业';
     $('#sync-banner').hidden = !running && !authenticating;
     const platformName = PLATFORM_META[model.data?.sync?.platformId]?.name;
     const platformIds = Array.isArray(model.data?.sync?.platformIds) ? model.data.sync.platformIds : [];
     const parallelMessage = platformIds.length > 1 ? `正在同步 ${platformIds.length} 个平台…` : null;
-    $('#sync-message').textContent = !running && authenticating ? '正在验证平台登录状态…' : parallelMessage || (platformName ? `正在读取${platformName}作业…` : '正在读取各平台作业…');
+    $('#sync-message').textContent = !running && authenticating ? '正在登录平台账号…' : parallelMessage || (platformName ? `正在读取${platformName}作业…` : '正在读取各平台作业…');
     const dates = getPlatforms().map((platform) => asDate(platform.lastSyncAt)).filter(Boolean);
     $('#list-update-time').textContent = dates.length ? relativeTime(new Date(Math.max(...dates.map(Number)))) : '尚未同步';
   }
@@ -401,13 +401,12 @@
     $('#credentials-form').reset();
     $('#credentials-error').hidden = true;
     $('#credential-platform').value = platformId;
-    $('#credentials-title').textContent = `配置${PLATFORM_META[platformId].name}`;
-    $('#credentials-description').textContent = platform.configured ? '已保存的密码不会回显。保存后尝试登录，成功后同步作业。' : '账号仅用于本机登录。保存后尝试登录，成功后同步作业。';
+    $('#credentials-title').textContent = `登录${PLATFORM_META[platformId].name}`;
+    $('#credentials-description').textContent = `${platformId === 'xiji' ? '请填写希冀平台和学校统一身份认证的两组账号密码。' : '请填写平台账号和密码。'}保存后自动登录，成功后读取作业；已有有效会话会复用。`;
     $('#vpn-fields').hidden = platformId !== 'xiji';
     $('#credential-vpn-username').required = platformId === 'xiji';
     $('#credential-vpn-password').required = platformId === 'xiji';
-    $('#credential-entry').required = platformId === 'xiji';
-    $('#credential-entry').value = platform.entryUrl || '';
+    $('#xiji-captcha-note').hidden = platformId !== 'xiji';
     $('#credentials-dialog').showModal();
     $('#credential-username').focus();
   }
@@ -422,7 +421,7 @@
     const platform = getPlatform(platformId);
     if (!platform || platformBusy(platform)) return;
     if (action === 'configure') { openCredentials(platformId); return; }
-    if (!platform.configured && action !== 'verify') { openCredentials(platformId); return; }
+    if (!platform.configured) { openCredentials(platformId); return; }
     model.busy.add(platformId);
     renderPlatforms();
     renderSync();
@@ -430,8 +429,7 @@
       await api(`/api/platforms/${encodeURIComponent(platformId)}/${action}`, { method: 'POST', body: '{}' });
       const name = PLATFORM_META[platformId].name;
       const messages = {
-        authenticate: `${name}登录已启动。成功后会同步作业；如需补充验证，平台卡片会提示。`,
-        verify: `正在检查${name}的当前登录状态，不提交账号密码。`,
+        authenticate: `正在使用本机已保存的${name}账号登录；成功后会同步作业。`,
         login: `已请求打开${name}辅助登录窗口。完成验证后请检查登录状态，再读取作业。`,
         collect: `正在读取${name}作业。`,
       };
@@ -560,12 +558,6 @@
     if (platformId === 'xiji') {
       body.vpnUsername = $('#credential-vpn-username').value.trim();
       body.vpnPassword = $('#credential-vpn-password').value;
-      body.entryUrl = $('#credential-entry').value.trim();
-      if (!safeUrl(body.entryUrl)) {
-        $('#credentials-error').textContent = '入口地址需要是有效的 HTTP 或 HTTPS 链接。';
-        $('#credentials-error').hidden = false;
-        return;
-      }
     }
     $('#save-credentials').disabled = true;
     $('#save-credentials').textContent = '正在保存…';
@@ -573,7 +565,7 @@
     try {
       await api(`/api/platforms/${encodeURIComponent(platformId)}/credentials`, { method: 'POST', body: JSON.stringify(body) });
       $('#credentials-dialog').close();
-      toast(`${PLATFORM_META[platformId].name}账号已保存。正在尝试登录；成功后同步作业。`, 'success', 10000);
+      toast(`${PLATFORM_META[platformId].name}账号已保存，正在自动登录；成功后读取作业。`, 'success', 10000);
       await refresh(true);
     } catch (error) {
       $('#credentials-error').textContent = error.message;
@@ -584,7 +576,7 @@
       $('#credential-password').value = '';
       $('#credential-vpn-password').value = '';
       $('#save-credentials').disabled = false;
-      $('#save-credentials').textContent = '保存并尝试登录';
+      $('#save-credentials').textContent = '保存并登录';
     }
   });
   $('#settings-form').addEventListener('submit', async (event) => {

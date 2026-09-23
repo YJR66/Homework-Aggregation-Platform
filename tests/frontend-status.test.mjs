@@ -22,6 +22,18 @@ function ui() {
 }
 const base = { id: 'one', platform: 'pta', title: '线性结构', course: '数据结构', status: 'pending', kind: 'assignment', url: 'https://pintia.cn/problem-sets/1/overview' };
 
+test('login UI asks for credentials instead of offering a session-only verification button', () => {
+  assert.match(source, /data-action="configure"[^>]*>\$\{icon\('link'\)\}账号密码登录/);
+  assert.match(source, /data-action="authenticate"[^>]*>.*已保存账号登录/);
+  assert.doesNotMatch(source, /data-action="verify"/);
+  assert.match(pageSource, /id="credential-username"[^>]*required/);
+  assert.match(pageSource, /id="credential-password"[^>]*required/);
+  assert.match(pageSource, /id="credential-vpn-username"/);
+  assert.match(pageSource, /id="credential-vpn-password"/);
+  assert.match(pageSource, /id="save-credentials"[^>]*>保存并登录/);
+  assert.doesNotMatch(pageSource, /id="credential-entry"/);
+});
+
 test('personal submission and progress labels appear with expandable visible evidence', () => {
   const { assignmentMarkup } = ui();
   const html = assignmentMarkup({ ...base, status: 'in_progress', statusLabel: '已完成 1/3 题', statusEvidence: '个人记录：A 已通过；B、C 未提交。', progress: { completed: 1, submitted: 1, total: 3, unit: '题' } });

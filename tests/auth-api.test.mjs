@@ -112,6 +112,30 @@ test('saving credentials releases its lock, authenticates, and automatically syn
   for (const secret of [USER, PASSWORD, VPN_PASSWORD]) assert.ok(!serialized.includes(secret));
 });
 
+test('credential login requires newly entered passwords and both Xiji account pairs', async t => {
+  const f = await fixture(t);
+  // A configured account must not make an empty password look like a new login.
+  assert.equal((await f.request('/api/platforms/pta/credentials', { username: USER })).status, 400);
+  assert.equal((await f.request('/api/platforms/xiji/credentials', { username: 'fixture-xiji', password: PASSWORD })).status, 400);
+  assert.equal(f.calls.saved.length, 0);
+  assert.equal(f.calls.auth.length, 0);
+
+  assert.equal((await f.request('/api/platforms/xiji/credentials', {
+    username: '  fixture-xiji  ', password: PASSWORD,
+    vpnUsername: '  fixture-school  ', vpnPassword: VPN_PASSWORD,
+  })).status, 200);
+  const state = await f.idle();
+  assert.deepEqual(f.calls.saved[0].value, {
+    username: 'fixture-xiji', password: PASSWORD,
+    vpnUsername: 'fixture-school', vpnPassword: VPN_PASSWORD,
+  });
+  assert.deepEqual(f.calls.auth.map(call => call.platform), ['xiji']);
+  assert.deepEqual(f.calls.collect, ['xiji']);
+  assert.equal(state.platforms.find(platform => platform.id === 'xiji').loginStatus, 'authenticated');
+  assert.ok(!JSON.stringify(state).includes(PASSWORD));
+  assert.ok(!JSON.stringify(state).includes(VPN_PASSWORD));
+});
+
 test('verify endpoint checks the existing session without password authentication or collection', async t => {
   const f = await fixture(t);
   await f.app.store.merge('pta', [oldItem], { complete: true });
